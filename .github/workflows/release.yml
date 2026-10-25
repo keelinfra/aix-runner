@@ -1,0 +1,64 @@
+# Manual release: builds one gitlab-runner tag for AIX and publishes it as a GitHub Release.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: gitlab-runner tag to release, e.g. v19.5.1 (empty = latest stable)
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Pick upstream tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag=$INPUT_TAG
+          if [ -z "$tag" ]; then
+            # Latest stable vX.Y.Z tag of gitlab-org/gitlab-runner (project 250833).
+            tag=$(curl -fsS 'https://gitlab.com/api/v4/projects/250833/repository/tags?per_page=100&search=%5Ev' \
+              | python3 -c 'import json,re,sys; t=[x["name"] for x in json.load(sys.stdin) if re.fullmatch(r"v\d+\.\d+\.\d+",x["name"])]; print(max(t,key=lambda v:[int(n) for n in v[1:].split(".")]))')
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "Building gitlab-runner $tag"
+
+      # Go comes with the runner image; GOTOOLCHAIN=auto fetches the version go.mod asks for.
+      - name: Build
+        run: ./build.sh "$TAG"
+
+      - name: Check binary
+        run: |
+          file dist/gitlab-runner-aix-ppc64 | tee /dev/stderr | grep -q '64-bit XCOFF'
+
+      # Anyone can check a binary came unmodified from this workflow:
+      #   gh attestation verify gitlab-runner-aix-ppc64 --repo keelinfra/aix-runner
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
+        with:
+          subject-path: dist/gitlab-runner-aix-ppc64
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<NOTES
+          Unofficial build of GitLab Runner $TAG for AIX 7.2/7.3 (ppc64), built from the upstream tag with the dependency patches in this repository.
+
+          This product is based on GitLab software. GitLab is a trademark of GitLab Inc. This project is not affiliated with or endorsed by GitLab Inc.
+
+          Verify: \`sha256sum -c sha256sums.txt\` and \`gh attestation verify gitlab-runner-aix-ppc64 --repo ${GITHUB_REPOSITORY}\`.
+          NOTES
+          gh release create "$TAG" dist/gitlab-runner-aix-ppc64 dist/sha256sums.txt \
+            --title "GitLab Runner $TAG for AIX" --notes-file notes.md
