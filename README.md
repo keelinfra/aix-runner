@@ -4,7 +4,23 @@ Unofficial builds of [GitLab Runner](https://gitlab.com/gitlab-org/gitlab-runner
 
 GitLab doesn't ship the runner for AIX, and AIX support is [not on the roadmap](https://gitlab.com/gitlab-org/gitlab-runner/-/issues/6324). The runner itself builds fine for AIX; a few of its dependencies don't. This repository patches those dependencies, builds the unmodified runner source for each upstream release, and publishes the binary.
 
-> **Status: experimental.** Builds are produced by CI. Runtime testing on AIX is in progress; this section will list what has been tested.
+> **Status: experimental.** Not affiliated with GitLab; no support beyond this repository's issues.
+
+## Tested
+
+GitLab Runner 19.5.1 on AIX 7.3 TL1 (7300-01-02), as a non-root user, shell executor, against gitlab.com (2026-10-25):
+
+| Check | Result |
+| --- | --- |
+| Register with a runner authentication token | works |
+| Shell job (bash 5.3 from the AIX Toolbox) | works |
+| Artifacts upload | works |
+| Local cache | works |
+| Git clone (default fetch strategy, git 2.51 from the AIX Toolbox) | works |
+| Cancel a running job | works: the job's foreground and background processes are killed. It took about 20 seconds after cancelling in the UI, because the runner only learns about the cancel at its next status update for the job. |
+| Stop the runner (SIGQUIT) | exits within a second |
+
+Not tested yet: AIX 7.2, `gitlab-runner install` as a system service, distributed (S3/GCS) cache, long-running stability.
 
 ## Requirements
 
@@ -16,16 +32,24 @@ GitLab doesn't ship the runner for AIX, and AIX support is [not on the roadmap](
 
 ```sh
 # Pick a release from https://github.com/keelinfra/aix-runner/releases
+# (before the first release: the artifact of the latest successful Build run)
 # Download gitlab-runner-aix-ppc64 and sha256sums.txt from that release, then:
 sha256sum -c sha256sums.txt          # or: openssl dgst -sha256 gitlab-runner-aix-ppc64
 mv gitlab-runner-aix-ppc64 gitlab-runner && chmod +x gitlab-runner
 
+mkdir -p "$HOME/gitlab-runner"
+# Use absolute paths for --config: the runner reloads it later from that path.
 ./gitlab-runner register --non-interactive \
+  --config "$HOME/gitlab-runner/config.toml" \
   --url https://gitlab.example.com \
   --token "$RUNNER_TOKEN" \
-  --executor shell
-./gitlab-runner run
+  --executor shell \
+  --env "PATH=/opt/freeware/bin:/usr/bin:/bin"
+./gitlab-runner run --config "$HOME/gitlab-runner/config.toml" \
+  --working-directory "$HOME/gitlab-runner"
 ```
+
+The `--env PATH=...` line matters: the AIX Toolbox installs git and bash under `/opt/freeware/bin`, which isn't on the default PATH, and jobs fail to clone without it.
 
 Create the runner and its token in GitLab first (Settings > CI/CD > Runners). The release page also lists a `gh attestation verify` command to check that a binary came from this repository's workflow.
 
