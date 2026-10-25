@@ -24,16 +24,17 @@ Not tested yet: AIX 7.2, `gitlab-runner install` as a system service, distribute
 
 ## Requirements
 
-- AIX 7.2 or 7.3 on POWER8 or newer. AIX 7.1 is not supported, because Go itself requires AIX 7.2.
+- AIX 7.2 or 7.3 on POWER8 or newer. AIX 7.1 is not supported, because Go itself requires AIX 7.2. (Running Jenkins agents on AIX 7.1, Solaris or HP-UX instead? See [Agent8](https://github.com/keelinfra/agent8).)
 - `git` and `bash` on the host, for example from the [AIX Toolbox](https://www.ibm.com/support/pages/aix-toolbox-open-source-software-overview).
-- Only the **shell** executor makes sense on AIX. The Docker and Kubernetes executors are compiled in but have nothing to talk to.
+- Only the **shell** executor makes sense on AIX. The Docker and Kubernetes executors are compiled in but have nothing to talk to, which is also why the binary is about 150 MB.
 
 ## Install
 
 ```sh
 # Pick a release from https://github.com/keelinfra/aix-runner/releases
 # (before the first release: the artifact of the latest successful Build run)
-# Download gitlab-runner-aix-ppc64 and sha256sums.txt from that release, then:
+# Download gitlab-runner-aix-ppc64 and sha256sums.txt from that release. AIX has no curl or
+# wget by default: download on another machine and scp them over, or use curl from the Toolbox.
 sha256sum -c sha256sums.txt          # or: openssl dgst -sha256 gitlab-runner-aix-ppc64
 mv gitlab-runner-aix-ppc64 gitlab-runner && chmod +x gitlab-runner
 
@@ -52,6 +53,19 @@ mkdir -p "$HOME/gitlab-runner"
 The `--env PATH=...` line matters: the AIX Toolbox installs git and bash under `/opt/freeware/bin`, which isn't on the default PATH, and jobs fail to clone without it.
 
 Create the runner and its token in GitLab first (Settings > CI/CD > Runners). The release page also lists a `gh attestation verify` command to check that a binary came from this repository's workflow.
+
+To keep it running after you log out:
+
+```sh
+nohup ./gitlab-runner run --config "$HOME/gitlab-runner/config.toml" \
+  --working-directory "$HOME/gitlab-runner" > "$HOME/gitlab-runner/runner.log" 2>&1 &
+```
+
+`gitlab-runner install` (running it as a system service) hasn't been tested on AIX yet.
+
+## Reporting problems
+
+Open an [issue here](https://github.com/keelinfra/aix-runner/issues), not on GitLab's tracker: these builds aren't GitLab's. Include `oslevel -s`, `./gitlab-runner --version` and the relevant lines of the runner log.
 
 ## How it's built
 
