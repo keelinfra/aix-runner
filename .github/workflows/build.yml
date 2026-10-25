@@ -1,0 +1,49 @@
+# Builds GitLab Runner for AIX from the latest upstream release tag (or a given one).
+# Pull requests and the daily schedule catch upstream breakage early; nothing is published.
+name: Build
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: gitlab-runner tag to build, e.g. v19.5.1 (empty = latest stable)
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Pick upstream tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag=$INPUT_TAG
+          if [ -z "$tag" ]; then
+            # Latest stable vX.Y.Z tag of gitlab-org/gitlab-runner (project 250833).
+            tag=$(curl -fsS 'https://gitlab.com/api/v4/projects/250833/repository/tags?per_page=100&search=%5Ev' \
+              | python3 -c 'import json,re,sys; t=[x["name"] for x in json.load(sys.stdin) if re.fullmatch(r"v\d+\.\d+\.\d+",x["name"])]; print(max(t,key=lambda v:[int(n) for n in v[1:].split(".")]))')
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "Building gitlab-runner $tag"
+
+      # Go comes with the runner image; GOTOOLCHAIN=auto fetches the version go.mod asks for.
+      - name: Build
+        run: ./build.sh "$TAG"
+
+      - name: Check binary
+        run: |
+          file dist/gitlab-runner-aix-ppc64 | tee /dev/stderr | grep -q '64-bit XCOFF'
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: gitlab-runner-aix-ppc64-${{ env.TAG }}
+          path: dist/
+
