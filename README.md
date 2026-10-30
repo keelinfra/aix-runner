@@ -70,6 +70,10 @@ More in [docs/install.md](docs/install.md): running in the background, checking 
 
 When you report a problem, include `oslevel -s`, `./gitlab-runner --version` and the relevant lines of the runner log.
 
+## Support
+
+aix-runner is free and stays MIT. Bugs go to [issues](https://github.com/keelinfra/aix-runner/issues). If you need paid support for running it on your AIX hosts, email [hello@keelinfra.io](mailto:hello@keelinfra.io).
+
 ## License
 
 [MIT](LICENSE), like GitLab Runner itself.
