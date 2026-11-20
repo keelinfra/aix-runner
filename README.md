@@ -28,7 +28,7 @@ Run **GitLab Runner on AIX 7.2 and 7.3** (ppc64), built from the unmodified upst
 
 ## How it works
 
-| | |
+| Step | What happens |
 |---|---|
 | **1 · Upstream** | [`build.sh`](build.sh) takes the upstream gitlab-runner tag; the runner's own code is not changed. |
 | **2 · Patch** | [`patch_deps.py`](patch_deps.py) patches four dependencies that don't compile for AIX: machineid, moby/term, go-billy and go-git. |
